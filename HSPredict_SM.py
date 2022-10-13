@@ -1,34 +1,15 @@
 import torch
 from torchvision import models, transforms
-import torch.optim as optim
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader, Subset, ConcatDataset
-import glob
-from tqdm.auto import tqdm
 from PIL import Image
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
-#matplotlib.use('Qt5Agg')
 import cv2
-import struct
-import pickle
 import os
-from numpy import asarray
-from torchvision.models.segmentation.deeplabv3 import DeepLabHead
-import torchvision.transforms.functional
-from pycocotools.coco import COCO
-import pycocotools.mask as mask
-import data_segmented as ds
-import train_segmented as ts
 import re
-import PIL.ImageOps
 import data_segmented_SM as ds
 import segmentation_models_pytorch as smp
-import train_segmented_SM as ts
-from segmentation_models_pytorch import utils
 import Main_SM
-from segmentation_models_pytorch import utils
+
 
 
 
@@ -124,22 +105,22 @@ if __name__ == '__main__':
 
     preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
 
-    # path_to_images = r"C:\Users\lisak\NG\segmentation\hand_bigger\data"
-    # path_to_annotations = r"C:\Users\lisak\NG\segmentation\hand_bigger\labels\labels.json"
+    path_to_images = r"C:\Users\lisak\NG\segmentation\hand_bigger\data"
+    path_to_annotations = r"C:\Users\lisak\NG\segmentation\hand_bigger\labels\labels.json"
 
-    path_to_images = r"C:\Users\lisak\NG\segmentation\finger\data"
-    path_to_annotations = r"C:\Users\lisak\NG\segmentation\finger\labels\labels.json"
+    # path_to_images = r"C:\Users\lisak\NG\segmentation\finger\data"
+    # path_to_annotations = r"C:\Users\lisak\NG\segmentation\finger\labels\labels.json"
 
 
     dataset = ds.Dataset_SM(path_to_images, path_to_annotations, classes=CLASSES,
                             preprocessing=ds.get_preprocessing(preprocessing_fn), trainstate=False)
 
-    path_to_weights = r"C:\Users\lisak\NG\segmentation\finger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Transfer\Best_Weights\best_checkpoint.pt"
+    path_to_weights = r"C:\Users\lisak\NG\segmentation\hand_bigger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Best_Weights\best_checkpoint.pt"
     ENCODER_WEIGHTS = Main_SM.get_state_dict(path_to_weights)
     model.load_state_dict(ENCODER_WEIGHTS)
 
 
-    for data in range(111):
+    for data in range(256):
 
         image, mask_gt, original_size, filename = dataset[data]
         image = torch.from_numpy(image)
@@ -150,8 +131,8 @@ if __name__ == '__main__':
 
         # imshow(torch.from_numpy(gt_pred.transpose(2, 0, 1)))
 
-        # save_path = r"C:\Users\lisak\NG\segmentation\hand_bigger\predictions\SM\UnetPlusPlus_vgg19_bn"
-        save_path = r"C:\Users\lisak\NG\segmentation\finger\predictions\SM\UnetPlusPlus_vgg19_bn"
+        save_path = r"C:\Users\lisak\NG\segmentation\hand_bigger\predictions\SM\UnetPlusPlus_vgg19_bn"
+        # save_path = r"C:\Users\lisak\NG\segmentation\finger\predictions\SM\UnetPlusPlus_vgg19_bn"
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
         gt_pred = std * gt_pred + mean
@@ -161,7 +142,7 @@ if __name__ == '__main__':
 
 
         try:
-            filename = re.search('8/(.+?).jpg', filename).group(1)
+            filename = re.search('6/(.+?).jpg', filename).group(1)
         except AttributeError:
             # AAA, ZZZ not found in the original string
             filename = 'error in filename'  # apply your error handling
