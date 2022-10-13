@@ -3,6 +3,7 @@ from . import encoders
 from . import decoders
 from . import losses
 from . import metrics
+import torch
 
 from .decoders.unet import Unet
 from .decoders.unetplusplus import UnetPlusPlus
@@ -60,3 +61,5 @@ def create_model(
         classes=classes,
         **kwargs,
     )
+
+

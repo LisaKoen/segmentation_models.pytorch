@@ -88,6 +88,8 @@ class TrainEpoch(Epoch):
     def batch_update(self, x, y):
         self.optimizer.zero_grad()
         prediction = self.model.forward(x)
+        if prediction.dim() > 3:
+            prediction = torch.squeeze(prediction, dim=1)
         loss = self.loss(prediction, y)
         loss.backward()
         self.optimizer.step()
@@ -111,5 +113,7 @@ class ValidEpoch(Epoch):
     def batch_update(self, x, y):
         with torch.no_grad():
             prediction = self.model.forward(x)
+            if prediction.dim() > 3:
+                prediction = torch.squeeze(prediction, dim=1)
             loss = self.loss(prediction, y)
         return loss, prediction

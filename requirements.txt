@@ -3,5 +3,11 @@ pretrainedmodels==0.7.4
 efficientnet-pytorch==0.7.1
 timm==0.4.12
 
-tqdm
-pillow
+tqdm~=4.64.1
+pillow~=9.2.0
+
+numpy~=1.23.1
+pycocotools~=2.0.4
+setuptools~=63.4.1
+scikit-image~=0.19.3
+albumentations~=1.3.0

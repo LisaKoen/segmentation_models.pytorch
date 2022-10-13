@@ -13,9 +13,17 @@ def preprocess_input(x, mean=None, std=None, input_space="RGB", input_range=None
     if mean is not None:
         mean = np.array(mean)
         x = x - mean
+        # if in_channels==1:
+        #     x = x - mean[0]
+        # else:
+        #     x = x - mean
 
     if std is not None:
         std = np.array(std)
         x = x / std
+        # if in_channels==1:
+        #     x = x / std[0]
+        # else:
+        #     x = x / std
 
     return x

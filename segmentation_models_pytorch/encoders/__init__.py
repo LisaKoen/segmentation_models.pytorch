@@ -82,6 +82,8 @@ def get_encoder(name, in_channels=3, depth=5, weights=None, output_stride=32, **
             )
         encoder.load_state_dict(model_zoo.load_url(settings["url"]))
 
+
+
     encoder.set_in_channels(in_channels, pretrained=weights is not None)
     if output_stride != 32:
         encoder.make_dilated(output_stride)
@@ -106,12 +108,13 @@ def get_preprocessing_params(encoder_name, pretrained="imagenet"):
             raise ValueError("Available pretrained options {}".format(all_settings.keys()))
         settings = all_settings[pretrained]
 
+
     formatted_settings = {}
+
     formatted_settings["input_space"] = settings.get("input_space", "RGB")
     formatted_settings["input_range"] = list(settings.get("input_range", [0, 1]))
     formatted_settings["mean"] = list(settings.get("mean"))
     formatted_settings["std"] = list(settings.get("std"))
-
     return formatted_settings
 
 
