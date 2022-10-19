@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import torch
 from PIL import Image
 import numpy as np
@@ -75,6 +74,23 @@ def get_preprocessing(preprocessing_fn):
         ]
     return albu.Compose(_transform)
 
+def get_preprocessing_eval(preprocessing_fn):
+    """Construct preprocessing transform
+
+    Args:
+        preprocessing_fn (callbale): data normalization function
+            (can be specific for each pretrained neural network)
+    Return:
+        transform: albumentations.Compose
+
+    """
+
+    _transform = [
+        albu.Lambda(image=preprocessing_fn),
+        albu.Lambda(image=to_tensor),
+        ]
+    return albu.Compose(_transform)
+
 class Dataset_SM(BaseDataset):
     """CamVid Dataset. Read images, apply augmentation and preprocessing transformations.
 
@@ -90,7 +106,7 @@ class Dataset_SM(BaseDataset):
     """
 
 
-    def __init__(self, imageDir, annsfile, classes=None, augmentation=None, preprocessing=None, flip=None, trainstate=True):
+    def __init__(self, imageDir, annsfile, classes=None, augmentation=None, preprocessing=None, flip=None, trainstate=True, evalstate=False):
         self.my_coco_dataset = COCO(annotation_file=annsfile)
         self.imageList = self.my_coco_dataset.imgs
         self.imageDir = imageDir
@@ -100,6 +116,7 @@ class Dataset_SM(BaseDataset):
         self.preprocessing = preprocessing
         self.flip = flip
         self.trainstate = trainstate
+        self.evalstate = evalstate
 
     def __getitem__(self, index):
 
@@ -110,6 +127,14 @@ class Dataset_SM(BaseDataset):
         image = asarray(image)
         original_size = image.shape
         image = np.stack((image, image, image), axis=-1)
+
+        if self.evalstate == True:
+            filename = self.imageList[index]['file_name']
+            image = preprocess(image=image)
+            if self.preprocessing:
+                sample = self.preprocessing(image=image['image'])
+                image = sample['image']
+            return image, original_size, filename
 
         anns = self.my_coco_dataset.loadAnns(index)
         rle = self.my_coco_dataset.annToRLE(anns[0])
@@ -131,12 +156,11 @@ class Dataset_SM(BaseDataset):
         if self.preprocessing:
             sample = self.preprocessing(image=image, mask=msk)
             image, msk = sample['image'], sample['mask']
-        if self.trainstate == False:
+        if self.trainstate == False & self.evalstate == False:
             filename = self.imageList[index]['file_name']
             return image, msk, original_size, filename
         else:
             return image, msk
-
 
     def __len__(self):
         return len(self.imageList)
