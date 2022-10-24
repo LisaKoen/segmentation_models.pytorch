@@ -1,33 +1,19 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from PIL import Image
-import torch
-from torchvision import datasets, models, transforms
-import torchvision
-import cv2
-# from data.utiils import check_models
-import HSPredict_SM as predict
 import torch
 from torchvision import models, transforms
 from PIL import Image
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
 import os
-import re
-import data_segmented_SM as ds
 import segmentation_models_pytorch as smp
 import Main_SM
 
 def make_image_types(image):
     image = cv2.resize(image, (384, 288))
-    # rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray_img = np.stack((gray_img, gray_img, gray_img), axis=-1)
 
     gray_img_pil = Image.fromarray(gray_img)
     gray_img_T = data_transforms(gray_img_pil)
-    gray_img_T = torch.unsqueeze(gray_img_T, 0)
     return gray_img_T, gray_img
 
 def set_text_in_image(image, text):
@@ -44,6 +30,46 @@ def set_text_in_image(image, text):
                 fontColor,
                 thickness,
                 lineType)
+def getcoloredMask(image, mask):
+    color_mask = np.zeros_like(image)
+    color_mask[:, :, 1] += (mask*255).astype('uint8')
+    masked = cv2.addWeighted(image, 1.0, color_mask, 1.0, 0.0)
+    return masked
+def get_predict(image, original_size):
+    postprocess = transforms.Compose([transforms.Resize(original_size)])
+    image_gt = postprocess(image)
+    image_gt = image_gt.numpy().transpose(1, 2, 0)
+
+
+    with torch.no_grad():
+        model.eval()
+        if torch.cuda.is_available():
+            dev = "cuda:0"
+        else:
+            dev = "cpu"
+        device = torch.device(dev)
+        model.to(device)
+        image = image.to(device).float()
+        msk_pred = model(image.unsqueeze(0)).float()
+
+        ytest = msk_pred[0, 0, :, :].clone().detach().cpu().numpy()
+
+    ytest = ytest.astype('float32')
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+    ytest = cv2.dilate(ytest, kernel, iterations=1)
+    ytest = cv2.morphologyEx(ytest, cv2.MORPH_CLOSE, kernel)
+    ytest = cv2.morphologyEx(ytest, cv2.MORPH_OPEN, kernel)
+
+    ytest = Image.fromarray((ytest * 255).astype(np.uint8), 'L')
+    ytest = postprocess(ytest)
+    ytest = np.array(ytest)/255
+    ytest = ytest.astype('float32')
+
+    colmask_pred = getcoloredMask(image_gt, ytest)
+
+
+    return colmask_pred
 
 
 if __name__ == '__main__':
@@ -67,49 +93,49 @@ if __name__ == '__main__':
     )
 
     preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
-    path_to_weights = r"C:\Users\lisak\NG\segmentation\finger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Transfer\Best_Weights\best_checkpoint.pt"
+    seg_subject = input("Enter hand or finger for segmentation  ")
+    print(seg_subject + " segmentation")
+    if seg_subject=="finger":
+        path_to_weights = r"C:\Users\lisak\NG\segmentation\finger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Transfer\Best_Weights\best_checkpoint.pt"
+    elif seg_subject=="hand":
+        path_to_weights = r"C:\Users\lisak\NG\segmentation\hand_bigger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Best_Weights\best_checkpoint.pt"
+    else:
+        print("Please enter hand or finger")
+        exit()
+
+    print("stand about 1.5 - 2 meters from camera and point your finger")
+
     ENCODER_WEIGHTS = Main_SM.get_state_dict(path_to_weights)
     model.load_state_dict(ENCODER_WEIGHTS)
 
-    # save_w_path = 'C:/Users/user/Lisa/NG/weights'
-    #
-    # feature_ext = False
-    # # batch_size = 32
-    # model_name = 'googlenet'
-    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # model = check_models(model_name, feature_ext)
-    #
-    # checkpoint = torch.load(save_w_path + '/' + 'googlenet_Mon_Jul_25_19_51_08_2022.pt')
-    # model.load_state_dict(checkpoint['state_dict'])
-    #
-    # data_transforms = transforms.Compose([transforms.Resize((224, 224)),
-    #                                       transforms.ToTensor()])
-    #
-    # idx2class = {0: 'NoPoint', 1: 'Point'}
+    data_transforms = transforms.ToTensor()
+    save_video_path = r"C:\Users\lisak\NG\segmentation\finger\predictions\SM\UnetPlusPlus_vgg19_bn\realtime"
+
     model.eval()
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0, cv2.CAP_ANY)
+    fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+    out = cv2.VideoWriter(save_video_path + "/realtime1.avi", fourcc, 30, (640, 480))
     i = 0
+
     while True:
         ret, frame = cap.read()
         img_T, img_show = make_image_types(frame)
+        original_size = frame.shape[0:2]
 
-        # if i % 5 == 0:
-        #     i = 0
-        #     prediction = predict.get_predict(img_T, original_size)
-        #     # with torch.no_grad():
-        #     #     y_pred = model(img_T)
-        #
-        # # y_pred_tags = torch.log_softmax(y_pred, dim=1)
-        # # _, y_pred_tag = torch.max(y_pred_tags, dim=1)
-        # # point_state = idx2class[y_pred_tag.item()]
-        # #
-        # # set_text_in_image(img_show, point_state)
-        #
-        # cv2.imshow('Realtime', prediction)
-        # key = cv2.waitKey(24)
+
+        if i % 5 == 0:
+            i = 0
+            prediction = get_predict(img_T, original_size)
+
+    # for saving the video
+        # prediction_s = (prediction * 255).astype('uint8')
+        # out.write(prediction_s)
+        cv2.imshow('Realtime', prediction)
+        key = cv2.waitKey(10)
         if key & 0xFF == ord('q'):
             break
         i += 1
     cap.release()
+    out.release()
     cv2.destroyAllWindows()
 
