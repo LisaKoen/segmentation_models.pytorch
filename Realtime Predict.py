@@ -57,9 +57,9 @@ def get_predict(image, original_size):
     ytest = ytest.astype('float32')
 
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
-    ytest = cv2.dilate(ytest, kernel, iterations=1)
-    ytest = cv2.morphologyEx(ytest, cv2.MORPH_CLOSE, kernel)
-    ytest = cv2.morphologyEx(ytest, cv2.MORPH_OPEN, kernel)
+    # ytest = cv2.dilate(ytest, kernel, iterations=1)
+    # ytest = cv2.morphologyEx(ytest, cv2.MORPH_CLOSE, kernel)
+    # ytest = cv2.morphologyEx(ytest, cv2.MORPH_OPEN, kernel)
 
     ytest = Image.fromarray((ytest * 255).astype(np.uint8), 'L')
     ytest = postprocess(ytest)
@@ -119,6 +119,7 @@ if __name__ == '__main__':
 
     while True:
         ret, frame = cap.read()
+        frame = cv2.flip(frame, 1)
         img_T, img_show = make_image_types(frame)
         original_size = frame.shape[0:2]
 
@@ -130,6 +131,7 @@ if __name__ == '__main__':
     # for saving the video
         # prediction_s = (prediction * 255).astype('uint8')
         # out.write(prediction_s)
+
         cv2.imshow('Realtime', prediction)
         key = cv2.waitKey(10)
         if key & 0xFF == ord('q'):
