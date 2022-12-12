@@ -1,14 +1,20 @@
 import torch
-from torchvision import models, transforms
+from torchvision import transforms
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import os
-import re
+
 import data_segmented_SM as ds
 import segmentation_models_pytorch as smp
 import Main_SM
+from numpy import asarray
+
+import gzip
+from os import listdir
+from os.path import isfile, join
+
 
 
 
@@ -30,9 +36,8 @@ def imshow(inp, title=None):
 
 def getcoloredMask(image, mask):
     color_mask = np.zeros_like(image)
-    # color_mask[:, :, 1] += mask.astype('uint8') * 250
     color_mask[:, :, 1] += (mask*250).astype('uint8')
-    masked = cv2.addWeighted(image, 1.0, color_mask, 1.0, 0.0)
+    masked = cv2.addWeighted(image, 0.5, color_mask, 1.0, 0.0)
     return masked
 
 def get_ground_truth_and_predict(image, mask_gt, original_size):
@@ -81,9 +86,8 @@ def get_ground_truth_and_predict(image, mask_gt, original_size):
 def get_predict(image, original_size):
     postprocess = transforms.Compose([transforms.Resize(original_size)])
     image_gt = postprocess(image)
-    # mask_gt = postprocess(mask_gt)
     image_gt = image_gt.numpy().transpose(1, 2, 0)
-    # msk_gt = mask_gt.numpy().transpose(1, 2, 0)
+
 
     with torch.no_grad():
         model.eval()
@@ -94,37 +98,31 @@ def get_predict(image, original_size):
         device = torch.device(dev)
         model.to(device)
         image = image.to(device).float()
-        msk_pred = model(image.unsqueeze(0)).float()
+        msk_pred = model(image.unsqueeze(0))
+        msk_pred = msk_pred.float()
 
         ytest = msk_pred[0, 0, :, :].clone().detach().cpu().numpy()
 
     ytest = ytest.astype('float32')
 
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
-    ytest = cv2.dilate(ytest, kernel, iterations=1)
-    ytest = cv2.morphologyEx(ytest, cv2.MORPH_CLOSE, kernel)
-    ytest = cv2.morphologyEx(ytest, cv2.MORPH_OPEN, kernel)
+    # ytest = cv2.dilate(ytest, kernel, iterations=1)
+    # ytest = cv2.morphologyEx(ytest, cv2.MORPH_CLOSE, kernel)
+    # ytest = cv2.morphologyEx(ytest, cv2.MORPH_OPEN, kernel)
 
     ytest = Image.fromarray((ytest * 255).astype(np.uint8), 'L')
     ytest = postprocess(ytest)
-    ytest = np.array(ytest)/255
-    ytest = ytest.astype('float32')
-
-    # msk_gt = msk_gt.squeeze(2)
-    # msk_gt = msk_gt.astype('float32')
+    ytest = np.array(ytest)
+    ytest = (ytest/255).astype('float32')
 
 
-    # colmask_gt = getcoloredMask(image_gt, msk_gt)
     colmask_pred = getcoloredMask(image_gt, ytest)
+    ytest_max = ytest.max()
+    if ytest_max == 0:
+        ytest_max = 1e-6
+    mask = ytest/ytest_max
 
-
-    # gt_pred = np.hstack((colmask_gt, colmask_pred))
-    return colmask_pred
-
-
-
-
-
+    return mask, colmask_pred, ytest
 
 if __name__ == '__main__':
 
@@ -148,25 +146,39 @@ if __name__ == '__main__':
 
     preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
 
-    path_to_images = r"C:\Users\lisak\NG\segmentation\hand_bigger\data"
-    path_to_annotations = r"C:\Users\lisak\NG\segmentation\hand_bigger\labels\labels.json"
+    # path_to_images = r"C:\Users\lisak\NG\segmentation\hand_bigger\data"
+    # path_to_annotations = r"C:\Users\lisak\NG\segmentation\hand_bigger\labels\labels.json"   # for cocodataset
+    path_to_images = r"C:\Users\lisak\NG\segmentation\finger_marker\data_new\test\images3"
+    # path_to_images = r"C:\Users\lisak\NG\segmentation\finger_marker\test_set_depthC:\Users\lisak\NG\segmentation\finger_marker\test_set_depth"
+    #path_to_images_depth = r"C:\Users\lisak\NG\segmentation\finger_marker\data_new\test\depth_images3"
+    # path_to_images = r"C:\Users\lisak\NG\segmentation\finger_marker\data"
+    path_to_annotations = None      # for test images only, if no cocodataset
+    # path_to_annotations = r"C:\Users\lisak\NG\segmentation\finger_marker\labels\labels.json"
 
     # path_to_images = r"C:\Users\lisak\NG\segmentation\finger\data"
     # path_to_annotations = r"C:\Users\lisak\NG\segmentation\finger\labels\labels.json"
-
-
+    image_files = [f for f in listdir(path_to_images) if isfile(join(path_to_images, f))]
+    #depth_files = [f for f in listdir(path_to_images) if isfile(join(path_to_images_depth, f))]
+    # print(image_files[138])
+    # print(image_files[486])
+    # print(image_files[1210])
     # dataset = ds.Dataset_SM(path_to_images, path_to_annotations, classes=CLASSES,
     #                         preprocessing=ds.get_preprocessing(preprocessing_fn), trainstate=False)
 
-    path_to_weights = r"C:\Users\lisak\NG\segmentation\finger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Transfer\Best_Weights\best_checkpoint.pt"
+    # path_to_weights = r"C:\Users\lisak\NG\segmentation\finger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Transfer\Best_Weights\best_checkpoint.pt"
+    path_to_weights = r"C:\Users\lisak\NG\segmentation\finger_marker\checkpoints\Best_Weights\best_checkpoint.pt"
     ENCODER_WEIGHTS = Main_SM.get_state_dict(path_to_weights)
     model.load_state_dict(ENCODER_WEIGHTS)
+    # filenames = next(os.walk(path_to_images))[2]
+    # filenames = os.listdir(path_to_images)
+    # filenames.sort()
 
     # path_to_images = r"C:\Users\lisak\NG\segmentation\finger\data\validation_images"
     dataset = ds.Dataset_SM(path_to_images, path_to_annotations, classes=CLASSES,
-                            preprocessing=ds.get_preprocessing_eval(preprocessing_fn), trainstate=False, evalstate=True)
+                            preprocessing=ds.get_preprocessing_eval(preprocessing_fn), trainstate=False, evalstate=True, image_files= image_files)
 
-
+    save_path = r"C:\Users\lisak\NG\segmentation\finger_marker\data_new\test\images3_overlay"
+    # for training data to get ground truth overlay and prediction overlay
     # for data in range(256):
     #
     #     image, mask_gt, original_size, filename = dataset[data]
@@ -195,35 +207,63 @@ if __name__ == '__main__':
     #         filename = 'error in filename'  # apply your error handling
     #
     #     gt_pred.save(str(save_path + '/' + filename + "_gt_pred.png"))
+    # for test data to get26346 just prediction overlay filenames from coco dataset or from paths
 
-    for data in range(256):
+    for data in range(2000):
 
+        # image, image_RGB, original_size, filename = dataset[data]
         image, original_size, filename = dataset[data]
         image = torch.from_numpy(image)
-        # mask_gt = torch.from_numpy(mask_gt)
-        # mask_gt = torch.unsqueeze(mask_gt, 0)
+        # filename_depth = filename.rsplit('-', 1)[1]
+        # filename_depth = filename_depth.rsplit('.', 1)[0]
+        # print(data)
 
-        prediction = get_predict(image, original_size)
+        # image_path = str(path_to_images_depth + '/' + filename + '.png')
+        # image_depth = Image.open(image_path)
+        # image_depth = asarray(image_depth)
+        # image_depth = torch.from_numpy(image_depth)
 
-        # imshow(torch.from_numpy(gt_pred.transpose(2, 0, 1)))
 
-        # save_path = r"C:\Users\lisak\NG\segmentation\hand_bigger\predictions\SM\UnetPlusPlus_vgg19_bn"
-        save_path = r"C:\Users\lisak\NG\segmentation\finger\predictions\SM\UnetPlusPlus_vgg19_bn\validation"
+        # mask, overlay = get_predict_depth(image, original_size, image_depth)
+
+        mask, overlay, ytest = get_predict(image, original_size)
+        # overlay = getcoloredMask(image_depth, ytest)
+
+
+
+
+
+        # save_path = r"C:\Users\lisak\NG\segmentation\finger_marker\predictions\validation\test""
+
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
-        prediction = std * prediction + mean
-        prediction = np.clip(prediction, 0, 1)
 
-        prediction = Image.fromarray((prediction * 255).astype(np.uint8))
+        # not needed for depth pictures
+        overlay = std * overlay + mean
+        overlay = np.clip(overlay, 0, 1)
 
-        try:
-            filename = re.search('6/(.+?).jpg', filename).group(1)
-        except AttributeError:
-            # AAA, ZZZ not found in the original string
-            filename = 'error in filename'  # apply your error handling
+        overlay = Image.fromarray((overlay * 255).astype(np.uint8))
+        # overlay = Image.fromarray(overlay.astype(np.uint8))     # for depth pictures
 
-        prediction.save(str(save_path + '/' + filename + "_pred.png"))
 
+        # try:
+        #     filename = re.search('6/(.+?).jpg', filename).group(1)
+        # except AttributeError:
+        #     # AAA, ZZZ not found in the original string
+        #     filename = 'error in filename'  # apply your error handling
+
+        overlay.save(str(save_path + '/overlay/' + filename + '_overlay.png'))
+        #
+        # mask_filename = str(save_path + '/gz/' + filename + '_mask.npy.gz')
+        #
+        #
+        #
+        #
+        #
+        #
+        #
+        # with gzip.GzipFile(mask_filename, "wb") as f:
+        #     np.save(f, mask)
 
 
 
