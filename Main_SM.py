@@ -1,54 +1,11 @@
-import os
-import matplotlib.pyplot as plt
 import data_segmented_SM as ds
 import torch
-import segmentation_models_pytorch as smp
 import train_segmented_SM as ts
-from segmentation_models_pytorch import utils
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader, ConcatDataset, random_split
-import ssl
-
-def get_state_dict(weight_path):
-    r"""Loads pretrianed weights to model.
-    Features::
-        - Incompatible layers (unmatched in name or size) will be ignored.
-        - Can automatically deal with keys containing "module.".
-    Args:
-        model (nn.Module): network model.
-        weight_path (str): path to pretrained weights.
-    Examples::
-        # >>> from torchreid.utils import load_pretrained_weights
-        # >>> weight_path = 'log/my_model/model-best.pth.tar'
-        # >>> load_pretrained_weights(model, weight_path)
-    """
-
-    checkpoint = torch.load(weight_path)
-    if 'state_dict' in checkpoint:
-        state_dict = checkpoint['state_dict']
-    else:
-        state_dict = checkpoint
-
-    for k, v in state_dict.items():
-        if k.startswith('module.' or 'encoder.'):
-            # k = k[7:] # discard module.
-            k.replace('.module', '')
-
-    return state_dict
-
-
-
-# def visualize(**images):
-#     """PLot images in one row."""
-#     n = len(images)
-#     plt.figure(figsize=(16, 5))
-#     for i, (name, image) in enumerate(images.items()):
-#         plt.subplot(1, n, i + 1)
-#         plt.xticks([])
-#         plt.yticks([])
-#         plt.title(' '.join(name.split('_')).title())
-#         plt.imshow(image)
-#     plt.show()
+from torch.utils.data import DataLoader, ConcatDataset, random_split
+from Unet_model import UnetPlusPlus
+import Seg_util as utils
+import train_one_epoch
 
 
 def trainTestSplit(dataset, TTR):
@@ -63,19 +20,15 @@ def trainTestSplit(dataset, TTR):
 if __name__ == '__main__':
     # Model, loss, optimizer
 
-    encoder_weights_url = False      # False for transfer learning from your own weights, True if using url
-
-
     ENCODER = "vgg19_bn"
-    ENCODER_WEIGHTS = 'imagenet'
+    ENCODER_WEIGHTS = None
     CLASSES = ['hand']
-    ACTIVATION = 'sigmoid'  # could be None for logits or 'softmax2d' for multiclass segmentation
+    ACTIVATION = 'sigmoid'
     DEVICE = 'cuda'
     in_channels = 3
 
 
-    # create segmentation model with pretrained encoder
-    model = smp.UnetPlusPlus(
+    model = UnetPlusPlus(
         encoder_name=ENCODER,
         encoder_weights=ENCODER_WEIGHTS,
         classes=len(CLASSES),
@@ -83,19 +36,15 @@ if __name__ == '__main__':
         in_channels=in_channels,
     )
 
-    preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, pretrained=ENCODER_WEIGHTS)
+    preprocessing_fn = utils.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
 
+    path_to_weights = r"C:\Users\lisak\NG\segmentation\hand_bigger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Best_Weights\best_checkpoint.pt"
+    ENCODER_WEIGHTS = utils.get_state_dict(path_to_weights)
+    model.load_state_dict(ENCODER_WEIGHTS)
 
-    # only needed for transfer learning (here replace url weights with your own weights)
-    if encoder_weights_url == False:
-        path_to_weights = r"C:\Users\lisak\NG\segmentation\hand_bigger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Best_Weights\best_checkpoint.pt"
-        NEW_ENCODER_WEIGHTS = get_state_dict(path_to_weights)
-        model.load_state_dict(NEW_ENCODER_WEIGHTS)
-
-
-    loss = utils.losses.BCELoss()
+    loss = utils.BCELoss()
     metrics = [
-        utils.metrics.IoU(threshold=0.5),
+        utils.IoU(threshold=0.5),
     ]
 
     optimizer = torch.optim.Adam([
@@ -124,6 +73,8 @@ if __name__ == '__main__':
     annotations_list = [path_to_annotations_A, path_to_annotations_B, path_to_annotations_C, path_to_annotations_D]
 
     megaDataset_list = []
+
+
     # Datasets (creates augmentations and combines all into one dataset, x6 of original size)
     for path_to_images, path_to_annotations in zip(image_path_list, annotations_list):
         dataset = ds.Dataset_SM(path_to_images, path_to_annotations, classes=CLASSES,
@@ -176,11 +127,11 @@ if __name__ == '__main__':
     train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4)
     valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=2)
 
-    path_to_checkpoints = r"C:\Users\lisak\NG\segmentation\finger+finger_marker\debug"
+    path_to_checkpoints = r"C:\Users\lisak\NG\segmentation\finger+finger_marker\checkpoints_debug"
     # create epoch runners
     # it is a simple loop of iterating over dataloader`s samples
 
-    train_epoch = utils.train.TrainEpoch(
+    train_epoch = train_one_epoch.TrainEpoch(
         model,
         loss=loss,
         metrics=metrics,
@@ -189,7 +140,7 @@ if __name__ == '__main__':
         verbose=True,
     )
 
-    valid_epoch = utils.train.ValidEpoch(
+    valid_epoch = train_one_epoch.ValidEpoch(
         model,
         loss=loss,
         metrics=metrics,

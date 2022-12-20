@@ -8,12 +8,12 @@ import os
 
 import data_segmented_SM as ds
 import segmentation_models_pytorch as smp
-import Main_SM
 from numpy import asarray
 
 import gzip
 from os import listdir
 from os.path import isfile, join
+import Seg_util as utils
 
 
 
@@ -37,7 +37,7 @@ def imshow(inp, title=None):
 def getcoloredMask(image, mask):
     color_mask = np.zeros_like(image)
     color_mask[:, :, 1] += (mask*250).astype('uint8')
-    masked = cv2.addWeighted(image, 0.5, color_mask, 1.0, 0.0)
+    masked = cv2.addWeighted(image, 1, color_mask, 1.0, 0.0)
     return masked
 
 def get_ground_truth_and_predict(image, mask_gt, original_size):
@@ -82,6 +82,26 @@ def get_ground_truth_and_predict(image, mask_gt, original_size):
 
     gt_pred = np.hstack((colmask_gt, colmask_pred))
     return gt_pred
+
+def get_ground_truth(image, mask_gt, original_size):
+    postprocess = transforms.Compose([transforms.Resize(original_size)])
+    image_gt = postprocess(image)
+    mask_gt = postprocess(mask_gt)
+    image_gt = image_gt.numpy().transpose(1, 2, 0)
+    msk_gt = mask_gt.numpy().transpose(1, 2, 0)
+
+
+
+    msk_gt = msk_gt.squeeze(2)
+    msk_gt = msk_gt.astype('float32')
+
+
+    colmask_gt = getcoloredMask(image_gt, msk_gt)
+    # colmask_pred = getcoloredMask(image_gt, ytest)
+
+
+    # gt_pred = np.hstack((colmask_gt, colmask_pred))
+    return colmask_gt
 
 def get_predict(image, original_size):
     postprocess = transforms.Compose([transforms.Resize(original_size)])
@@ -146,73 +166,68 @@ if __name__ == '__main__':
 
     preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
 
-    # path_to_images = r"C:\Users\lisak\NG\segmentation\hand_bigger\data"
-    # path_to_annotations = r"C:\Users\lisak\NG\segmentation\hand_bigger\labels\labels.json"   # for cocodataset
-    path_to_images = r"C:\Users\lisak\NG\segmentation\finger_marker\data_new\test\images3"
-    # path_to_images = r"C:\Users\lisak\NG\segmentation\finger_marker\test_set_depthC:\Users\lisak\NG\segmentation\finger_marker\test_set_depth"
-    #path_to_images_depth = r"C:\Users\lisak\NG\segmentation\finger_marker\data_new\test\depth_images3"
-    # path_to_images = r"C:\Users\lisak\NG\segmentation\finger_marker\data"
-    path_to_annotations = None      # for test images only, if no cocodataset
-    # path_to_annotations = r"C:\Users\lisak\NG\segmentation\finger_marker\labels\labels.json"
 
-    # path_to_images = r"C:\Users\lisak\NG\segmentation\finger\data"
-    # path_to_annotations = r"C:\Users\lisak\NG\segmentation\finger\labels\labels.json"
+    path_to_images = r"C:\Users\lisak\NG\segmentation\media_pipe\image\Point"
+
+    path_to_annotations = None      # for test images only, if no cocodataset
+
+    path_to_bin_masks = r"C:\Users\lisak\NG\segmentation\media_pipe\mask\Point"
+
     image_files = [f for f in listdir(path_to_images) if isfile(join(path_to_images, f))]
-    #depth_files = [f for f in listdir(path_to_images) if isfile(join(path_to_images_depth, f))]
-    # print(image_files[138])
-    # print(image_files[486])
-    # print(image_files[1210])
+    # depth_files = [f for f in listdir(path_to_images) if isfile(join(path_to_images_depth, f))]
+
     # dataset = ds.Dataset_SM(path_to_images, path_to_annotations, classes=CLASSES,
     #                         preprocessing=ds.get_preprocessing(preprocessing_fn), trainstate=False)
 
     # path_to_weights = r"C:\Users\lisak\NG\segmentation\finger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Transfer\Best_Weights\best_checkpoint.pt"
-    path_to_weights = r"C:\Users\lisak\NG\segmentation\finger_marker\checkpoints\Best_Weights\best_checkpoint.pt"
-    ENCODER_WEIGHTS = Main_SM.get_state_dict(path_to_weights)
+    path_to_weights = r"C:\Users\lisak\NG\segmentation\media_pipe\checkpoints\Best_Weights\best_checkpoint.pt"
+    ENCODER_WEIGHTS = utils.get_state_dict(path_to_weights)
     model.load_state_dict(ENCODER_WEIGHTS)
     # filenames = next(os.walk(path_to_images))[2]
     # filenames = os.listdir(path_to_images)
     # filenames.sort()
 
     # path_to_images = r"C:\Users\lisak\NG\segmentation\finger\data\validation_images"
-    dataset = ds.Dataset_SM(path_to_images, path_to_annotations, classes=CLASSES,
-                            preprocessing=ds.get_preprocessing_eval(preprocessing_fn), trainstate=False, evalstate=True, image_files= image_files)
+    # dataset = ds.Dataset_SM(path_to_images, path_to_annotations, path_to_bin_masks, classes=CLASSES,
+    #                         preprocessing=ds.get_preprocessing_eval(preprocessing_fn), trainstate=False, evalstate=True, image_files= image_files, greyscale=False)
+    #
+    dataset = ds.Dataset_SM(path_to_images, path_to_annotations, path_to_bin_masks, classes=CLASSES,
+                            preprocessing=ds.get_preprocessing_eval(preprocessing_fn), trainstate=False, evalstate=False,
+                            image_files=image_files, greyscale=False)
+    # save_path = r"C:\Users\lisak\NG\segmentation\media_pipe\ground_truth_overlay\debug"
 
-    save_path = r"C:\Users\lisak\NG\segmentation\finger_marker\data_new\test\images3_overlay"
+    # save_path = r"C:\Users\lisak\NG\segmentation\depth_overlay"
     # for training data to get ground truth overlay and prediction overlay
-    # for data in range(256):
+    # for data in range(len(dataset)):
     #
     #     image, mask_gt, original_size, filename = dataset[data]
     #     image = torch.from_numpy(image)
     #     mask_gt = torch.from_numpy(mask_gt)
     #     mask_gt = torch.unsqueeze(mask_gt, 0)
     #
-    #     gt_pred = get_ground_truth_and_predict(image, mask_gt, original_size)
+    #     colmask_gt = get_ground_truth(image, mask_gt, original_size)
     #
     #     # imshow(torch.from_numpy(gt_pred.transpose(2, 0, 1)))
     #
-    #     save_path = r"C:\Users\lisak\NG\segmentation\hand_bigger\predictions\SM\UnetPlusPlus_vgg19_bn"
+    #
     #     # save_path = r"C:\Users\lisak\NG\segmentation\finger\predictions\SM\UnetPlusPlus_vgg19_bn"
     #     mean = np.array([0.485, 0.456, 0.406])
     #     std = np.array([0.229, 0.224, 0.225])
-    #     gt_pred = std * gt_pred + mean
-    #     gt_pred = np.clip(gt_pred, 0, 1)
+    #     colmask_gt = std * colmask_gt + mean
+    #     colmask_gt = np.clip(colmask_gt, 0, 1)
     #
-    #     gt_pred = Image.fromarray((gt_pred*255).astype(np.uint8))
+    #     colmask_gt = Image.fromarray((colmask_gt*255).astype(np.uint8))
     #
     #
-    #     try:
-    #         filename = re.search('6/(.+?).jpg', filename).group(1)
-    #     except AttributeError:
-    #         # AAA, ZZZ not found in the original string
-    #         filename = 'error in filename'  # apply your error handling
     #
-    #     gt_pred.save(str(save_path + '/' + filename + "_gt_pred.png"))
-    # for test data to get26346 just prediction overlay filenames from coco dataset or from paths
-
-    for data in range(2000):
+    #
+    #     colmask_gt.save(str(save_path + '/' + filename + "_overlay.png"))
+    # for test data to get just prediction overlay filenames from coco dataset or from paths
+    save_path = r"C:\Users\lisak\NG\segmentation\media_pipe\training_overlay"
+    for data in range(len(dataset)):
 
         # image, image_RGB, original_size, filename = dataset[data]
-        image, original_size, filename = dataset[data]
+        image, msk, original_size, filename = dataset[data]
         image = torch.from_numpy(image)
         # filename_depth = filename.rsplit('-', 1)[1]
         # filename_depth = filename_depth.rsplit('.', 1)[0]
@@ -233,7 +248,7 @@ if __name__ == '__main__':
 
 
 
-        # save_path = r"C:\Users\lisak\NG\segmentation\finger_marker\predictions\validation\test""
+
 
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
@@ -255,12 +270,12 @@ if __name__ == '__main__':
         overlay.save(str(save_path + '/overlay/' + filename + '_overlay.png'))
         #
         # mask_filename = str(save_path + '/gz/' + filename + '_mask.npy.gz')
-        #
-        #
-        #
-        #
-        #
-        #
+
+
+
+
+
+
         #
         # with gzip.GzipFile(mask_filename, "wb") as f:
         #     np.save(f, mask)

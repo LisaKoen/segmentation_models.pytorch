@@ -4,9 +4,9 @@ from PIL import Image
 import numpy as np
 import cv2
 import os
-from Lisa_Seg_model import UnetPlusPlus
+from Seg_model import UnetPlusPlus
 
-import Lisa_Seg_util as utils
+import Seg_util as utils
 
 def make_image_types(image):
     image = cv2.resize(image, (384, 288))
@@ -81,21 +81,23 @@ if __name__ == '__main__':
         classes=len(CLASSES),
         activation=ACTIVATION,
         in_channels=in_channels
+
     )
 
     preprocessing_fn = utils.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
-    seg_subject = input("Enter hand or finger for segmentation:  ")
-    print(seg_subject + " segmentation")
-    if seg_subject == "finger":
-        path_to_weights = r"C:\Users\lisak\NG\segmentation\finger+finger_marker\checkpoints_2\Best_Weights\checkpoint35.pt"
-        #path_to_weights = r"C:\Users\lisak\NG\segmentation\finger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Transfer\Best_Weights\best_checkpoint.pt"
-    elif seg_subject == "hand":
-        path_to_weights = r"C:\Users\lisak\NG\segmentation\hand_bigger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Best_Weights\best_checkpoint.pt"
-    else:
-        print("Please enter hand or finger")
-        exit()
+    path_to_weights = r"C:\Users\lisak\NG\segmentation\arm\checkpoints\arm_finger_far_close\Best_Weights\best_checkpoint.pt"
+    # seg_subject = input("Enter hand or finger for segmentation:  ")
+    # print(seg_subject + " segmentation")
+    # if seg_subject == "finger":
+    #     path_to_weights = r"C:\Users\lisak\NG\segmentation\arm\checkpoints\arm_finger_far_close\Best_Weights\best_checkpoint.pt"
+    #     #path_to_weights = r"C:\Users\lisak\NG\segmentation\finger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Transfer\Best_Weights\best_checkpoint.pt"
+    # elif seg_subject == "hand":
+    #     path_to_weights = r"C:\Users\lisak\NG\segmentation\hand_bigger\checkpoints\SM\UnetPlusPlus_vgg19_bn\Best_Weights\best_checkpoint.pt"
+    # else:
+    #     print("Please enter hand or finger")
+    #     exit()
 
-    print("stand about 1.5 - 2 meters from camera and point your finger")
+    # print("stand about 1.5 - 2 meters from camera and point your finger")
 
     ENCODER_WEIGHTS = utils.get_state_dict(path_to_weights)
     model.load_state_dict(ENCODER_WEIGHTS)

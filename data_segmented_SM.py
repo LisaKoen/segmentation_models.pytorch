@@ -1,12 +1,11 @@
-import torch
 from PIL import Image
 import numpy as np
 from numpy import asarray
 from pycocotools.coco import COCO
 import pycocotools.mask as m
-from skimage.util import random_noise
 import albumentations as albu
 from torch.utils.data import Dataset as BaseDataset
+from os import listdir
 
 
 def get_flip():
@@ -109,9 +108,10 @@ class Dataset_SM(BaseDataset):
             (e.g. noralization, shape manipulation, etc.)
     """
 
-    def __init__(self, imageDir, annsfile, classes=None, augmentation=None, preprocessing=None, flip=None,
-                 trainstate=True, evalstate=False, image_files=None):
+    def __init__(self, imageDir, annsfile, masksDir=None, classes=None, augmentation=None, preprocessing=None, flip=None,
+                 trainstate=True, evalstate=False, image_files=None, greyscale=True):
         self.annsfile = annsfile
+        self.masksDir = masksDir
         self.my_coco_dataset = COCO(annotation_file=self.annsfile)
         self.imageList = self.my_coco_dataset.imgs
         self.imageDir = imageDir
@@ -123,6 +123,9 @@ class Dataset_SM(BaseDataset):
         self.trainstate = trainstate
         self.evalstate = evalstate
         self.image_files = image_files
+        self.greyscale = greyscale
+        if self.masksDir:
+            self.imageList = listdir(self.imageDir)
 
 
 
@@ -131,61 +134,59 @@ class Dataset_SM(BaseDataset):
         preprocess = albu.Resize(384, 288)
         # # read data
         if self.image_files:
-            image_path = str(self.imageDir + '/' + self.image_files[index])
+            filename = self.image_files[index]
+
+        elif self.annsfile is not None:
+            filename = self.imageList[index]['file_name']
+
+        elif self.masksDir:
+            filename = listdir(self.imageDir)[index]
+
         else:
-            if self.annsfile is not None:
-                image_path = str(self.imageDir + '/' + self.imageList[index]['file_name'])
-            else:
-                image_path = str(self.imageDir + '/' + str(index) + '.png')  # for case where filenames are like the index
-        # image = Image.open(image_path)                # for case of RGB files
-        image = Image.open(image_path).convert('L')     # for case of RGB files
-        # image = Image.open(image_path)
+            filename = str(index) + '.png'  # for case where filenames are like the index
+
+        # image = Image.open(image_path).convert('L')     # for case of RGB files that should be trained as greyscale !!!
+        image_path = str(self.imageDir + '/' + filename)
+        image = Image.open(image_path)
         image = asarray(image)
         original_size = image.shape
-        image = np.stack((image, image, image), axis=-1)
-        # original_size = image.shape[0:2]       # for case of RGB files
+        if self.greyscale:
+            image = np.stack((image, image, image), axis=-1)
+        else:
+            original_size = image.shape[0:2]       # for case of RGB files
 
         if self.evalstate:
-            if self.image_files:
-                filename = self.image_files[index]
-                filename = filename.rsplit('.', 1)[0]
-            else:
-                if self.annsfile is None:
-                    filename = str(index)  # for case where filenames are like the index
-                else:
-                    filename = self.imageList[index]['file_name']
-                    filename = filename.rsplit('/', 1)[1]
-            image = preprocess(image=image)
-            if self.preprocessing:
-                sample = self.preprocessing(image=image['image'])  # make Tensor
-                image = sample['image']
-            # return image, image_RGB, original_size, filename   # for case of RGB files
             return image, original_size, filename
-
-        anns = self.my_coco_dataset.loadAnns(index)
-        rle = self.my_coco_dataset.annToRLE(anns[0])
-        msk = m.decode(rle)
-        sample = preprocess(image=image, mask=msk)
-        image, msk = sample['image'], sample['mask']
-
-        if self.flip:
-            sample = self.flip(image=image, mask=msk)
-            image, msk = sample['image'], sample['mask']
-
-        # apply augmentations
-        if self.augmentation:
-            sample = self.augmentation(image=image, mask=msk)
-            image, msk = sample['image'], sample['mask']
-
-        # apply preprocessing
-        if self.preprocessing:
-            sample = self.preprocessing(image=image, mask=msk)
-            image, msk = sample['image'], sample['mask']
-        if self.trainstate == False & self.evalstate == False:
-            filename = self.imageList[index]['file_name']
-            return image, msk, original_size, filename
         else:
-            return image, msk
+            if self.annsfile is None:
+                mask_path = str(self.masksDir + '/' + filename)
+                msk = Image.open(mask_path)
+                msk = asarray(msk)
+            else:
+                anns = self.my_coco_dataset.loadAnns(index)
+                rle = self.my_coco_dataset.annToRLE(anns[0])
+                msk = m.decode(rle)/255
+            sample = preprocess(image=image, mask=msk)
+            image, msk = sample['image'], sample['mask']
+
+            if self.flip:
+                sample = self.flip(image=image, mask=msk)
+                image, msk = sample['image'], sample['mask']
+
+            # apply augmentations
+            if self.augmentation:
+                sample = self.augmentation(image=image, mask=msk)
+                image, msk = sample['image'], sample['mask']
+
+            # apply preprocessing
+            if self.preprocessing:
+                sample = self.preprocessing(image=image, mask=msk)
+                image, msk = sample['image'], sample['mask']
+            if self.trainstate == False:
+                # filename = self.imageList[index]['file_name']
+                return image, msk, original_size, filename
+            else:
+                return image, msk
 
     def __len__(self):
         return len(self.imageList)
